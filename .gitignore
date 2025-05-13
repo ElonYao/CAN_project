@@ -1,7 +1,7 @@
 # Prerequisites
 *.d
-.CPU1_RAM/
-.CPU1_LAUNCHXL_RAM/
+CPU1_RAM/
+CPU1_LAUNCHXL_RAM/
 # Object files
 *.o
 *.ko
