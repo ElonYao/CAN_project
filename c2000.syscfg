@@ -9,8 +9,10 @@
 /**
  * Import the modules used in this configuration.
  */
-const can  = scripting.addModule("/driverlib/can.js", {}, false);
-const can1 = can.addInstance();
+const can       = scripting.addModule("/driverlib/can.js", {}, false);
+const can1      = can.addInstance();
+const cputimer  = scripting.addModule("/driverlib/cputimer.js", {}, false);
+const cputimer1 = cputimer.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -20,9 +22,17 @@ can1.msgObjsUsed           = [1];
 can1.can.can_rxPin.$assign = "GPIO5";
 can1.can.can_txPin.$assign = "GPIO4";
 can1.msgObj1.$name         = "msgObj0";
-can1.msgObj1.msgID         = 291;
 can1.msgObj1.msgType       = "CAN_MSG_OBJ_TYPE_TX";
 can1.msgObj1.msgLen        = 8;
+can1.msgObj1.msgID         = 291;
+
+cputimer1.$name                    = "mainTimer";
+cputimer1.emulationMode            = "CPUTIMER_EMULATIONMODE_RUNFREE";
+cputimer1.enableInterrupt          = true;
+cputimer1.registerInterrupts       = true;
+cputimer1.startTimer               = true;
+cputimer1.timerPeriod              = 120000;
+cputimer1.timerInt.enableInterrupt = true;
 
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future

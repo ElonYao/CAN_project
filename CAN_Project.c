@@ -1,11 +1,11 @@
 //#############################################################################
 //
-// FILE:   empty_driverlib_main.c
+// FILE:   CAN_communication.c
 //
-//! \addtogroup driver_example_list
-//! <h1>Empty Project Example</h1> 
+//! Author: Elon Yao
+//! Time: 20250513
+//! Description: This is a CAN communication test project
 //!
-//! This example is an empty project setup for Driverlib development.
 //!
 //
 //#############################################################################
@@ -51,7 +51,30 @@
 #include "device.h"
 #include "board.h"
 #include "c2000ware_libraries.h"
+#include "comm_Elon.h"
 
+
+
+canMsg_t requestMsg={
+    .canId=0x7df,
+    .objID=1,
+    .len=8,
+    .tRate=1000,
+    .tRcounter=0,
+    .errorCounter=0,
+    .msgIDtype=CAN_MSG_FRAME_STD,
+    .msgObjtype=CAN_MSG_OBJ_TYPE_TX
+};
+canMsg_t responseMsg={
+    .canId=0x7e8,
+    .objID=2,
+    .len=8,
+    .tRate=0,
+    .tRcounter=0,
+    .errorCounter=0,
+    .msgIDtype=CAN_MSG_FRAME_STD,
+    .msgObjtype=CAN_MSG_OBJ_TYPE_TX
+};
 //
 // Main
 //
@@ -95,12 +118,16 @@ void main(void)
     EINT;
     ERTM;
 
+
     while(1)
     {
-        
+
     }
 }
-
+__interrupt void INT_mainTimer_ISR()
+{
+    Interrupt_clearACKGroup(INT_mainTimer_INTERRUPT_ACK_GROUP);
+}
 //
 // End of File
 //
