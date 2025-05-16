@@ -13,6 +13,8 @@ const can       = scripting.addModule("/driverlib/can.js", {}, false);
 const can1      = can.addInstance();
 const cputimer  = scripting.addModule("/driverlib/cputimer.js", {}, false);
 const cputimer1 = cputimer.addInstance();
+const i2c       = scripting.addModule("/driverlib/i2c.js", {}, false);
+const i2c1      = i2c.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -33,6 +35,18 @@ cputimer1.registerInterrupts       = true;
 cputimer1.startTimer               = true;
 cputimer1.timerPeriod              = 120000;
 cputimer1.timerInt.enableInterrupt = true;
+
+i2c1.$name                  = "encoder_I2C";
+i2c1.emulationMode          = "I2C_EMULATION_FREE_RUN";
+i2c1.bitCount               = "I2C_BITCOUNT_8";
+i2c1.enabledInterrupts      = ["I2C_INT_REG_ACCESS_RDY","I2C_INT_STOP_CONDITION"];
+i2c1.registerInterrupts     = true;
+i2c1.useFifo                = false;
+i2c1.i2c.$assign            = "I2CB";
+i2c1.i2c.i2c_sdaPin.$assign = "GPIO34";
+i2c1.i2c.i2c_sclPin.$assign = "GPIO51";
+i2c1.sdaQual.padConfig      = "STD";
+i2c1.sclQual.padConfig      = "STD";
 
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future

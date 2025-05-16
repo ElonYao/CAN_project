@@ -52,11 +52,11 @@
 #include "board.h"
 #include "c2000ware_libraries.h"
 #include "comm_Elon.h"
+#include "i2c_Elon.h"
 
 
-
-canMsg_t requestMsg={
-    .canId=0x7df,
+canMsg_t angle={
+    .canId=0x123,
     .objID=1,
     .len=8,
     .tRate=1000,
@@ -75,6 +75,10 @@ canMsg_t responseMsg={
     .msgIDtype=CAN_MSG_FRAME_STD,
     .msgObjtype=CAN_MSG_OBJ_TYPE_TX
 };
+as5600Obj sensor1;
+as5600Handle sensor1Handler;
+
+as5600Obj *currentSensor=&sensor1;
 //
 // Main
 //
@@ -106,27 +110,84 @@ void main(void)
     // PinMux and Peripheral Initialization
     //
     Board_init();
+    I2C_enableFIFO(I2CB_BASE);
+    I2C_clearInterruptStatus(I2CB_BASE, I2C_INT_RXFF | I2C_INT_TXFF);
 
     //
     // C2000Ware Library initialization
     //
     C2000Ware_libraries_init();
-
+    //Instance initialization
+    sensor1Handler=encoderInit(&sensor1,sizeof(sensor1));
     //
     // Enable Global Interrupt (INTM) and real time interrupt (DBGM)
     //
     EINT;
     ERTM;
-
-
+    zeroCalibration(currentSensor);
     while(1)
     {
+        if(requestMsg.tRcounter>=2)
+        {
+            while(!currentSensor->flag_dataRdy)
+            {
+                HAL_i2cRead(currentSensor);
+            }
+            mechanicalAngleDeg(currentSensor);
+            currentSensor->flag_dataRdy=0;
+            requestMsg.tRcounter=0;
+        }
 
     }
 }
 __interrupt void INT_mainTimer_ISR()
 {
+    requestMsg.tRcounter++;
     Interrupt_clearACKGroup(INT_mainTimer_INTERRUPT_ACK_GROUP);
+}
+__interrupt void INT_encoder_I2C_ISR()
+{
+    I2C_InterruptSource intSource;
+    uint16_t index;
+    intSource=I2C_getInterruptSource(I2CB_BASE);
+
+    if(intSource==I2C_INTSRC_STOP_CONDITION)
+    {
+        if(currentSensor->I2C_status==WRITE_BUSY)
+        {
+            currentSensor->I2C_status=INACTIVE;
+        }
+        else
+        {
+            if(currentSensor->I2C_status==SEND_WITHOUT_STOP_BUSY || currentSensor->I2C_status==INACTIVE)
+            {
+                currentSensor->I2C_status=SEND_WITHOUT_STOP;//retry, may need to limit the numbers
+            }
+            else if(currentSensor->I2C_status==READ_BUSY)
+            {
+                currentSensor->I2C_status=INACTIVE;
+                for(index=0;index<currentSensor->byteNum;index++)
+                {
+                    currentSensor->raw[index]=I2C_getData(I2CB_BASE);
+                }
+                currentSensor->flag_dataRdy=1;
+
+            }
+        }
+    }
+    else if(intSource==I2C_INTSRC_REG_ACCESS_RDY)
+    {
+        if(I2C_getStatus(I2CB_BASE)& I2C_STS_NO_ACK)
+        {
+            I2C_sendStopCondition(I2CB_BASE);
+            I2C_clearStatus(I2CB_BASE, I2C_STS_NO_ACK);
+        }
+        else if(currentSensor->I2C_status==SEND_WITHOUT_STOP_BUSY)
+        {
+            currentSensor->I2C_status=RESTART;
+        }
+    }
+    Interrupt_clearACKGroup(INT_encoder_I2C_INTERRUPT_ACK_GROUP);
 }
 //
 // End of File
