@@ -20,6 +20,7 @@ as5600Handle encoderInit(void * pmemory,const size_t numBytes )
     obj->retryCounter=0;
     obj->I2C_status=INACTIVE;
     obj->flag_dataRdy=0;
+    obj->updateCounter=0;
     return handler;
 }
 
@@ -93,6 +94,7 @@ float32_t mechanicalAngleDeg(as5600Handle handler)
     angleDeg=delta*MATH_RAW2EDG;//signed
     angleDeg=(angleDeg>180.0f)?(angleDeg-360.0f):((angleDeg<-180.0f)? (angleDeg+360.0f):angleDeg);
     obj->angleDeg=angleDeg;
+    obj->angleRad=MATH_DEG2RAD*angleDeg;
     return angleDeg;
 }
 

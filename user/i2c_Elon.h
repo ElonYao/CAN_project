@@ -8,6 +8,7 @@ extern "C" {
 #include "string.h"
 
 #define MATH_RAW2EDG 0.087890625f
+#define MATH_DEG2RAD 1.745329E-2f
 typedef enum
 {
     SUCCESS,
@@ -39,6 +40,7 @@ typedef struct _AS5600_
     status_t I2C_status;
     uint16_t retryCounter;
     uint16_t flag_dataRdy;
+    uint16_t updateCounter;
 }as5600Obj;
 
 typedef struct _AS5600_ *as5600Handle;

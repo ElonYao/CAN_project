@@ -53,13 +53,14 @@
 #include "c2000ware_libraries.h"
 #include "comm_Elon.h"
 #include "i2c_Elon.h"
-
+#include "speedObserver_Elon.h"
+#include "circularBuffer.h"
 
 canMsg_t angle={
     .canId=0x123,
     .objID=1,
     .len=8,
-    .tRate=1000,
+    .tRate=10,
     .tRcounter=0,
     .errorCounter=0,
     .msgIDtype=CAN_MSG_FRAME_STD,
@@ -79,12 +80,16 @@ as5600Obj sensor1;
 as5600Handle sensor1Handler;
 
 as5600Obj *currentSensor=&sensor1;
+
+speedObserver_obj angularObserver;
+speedObserverHandle AOHandler;
+
 //
 // Main
 //
 void main(void)
 {
-
+    uint16_t temp;
     //
     // Initialize device clock and peripherals
     //
@@ -119,6 +124,7 @@ void main(void)
     C2000Ware_libraries_init();
     //Instance initialization
     sensor1Handler=encoderInit(&sensor1,sizeof(sensor1));
+    AOHandler=speedObserverInit(&angularObserver,sizeof(angularObserver));
     //
     // Enable Global Interrupt (INTM) and real time interrupt (DBGM)
     //
@@ -127,22 +133,40 @@ void main(void)
     zeroCalibration(currentSensor);
     while(1)
     {
-        if(requestMsg.tRcounter>=2)
+        if(currentSensor->updateCounter>=2)
         {
             while(!currentSensor->flag_dataRdy)
             {
                 HAL_i2cRead(currentSensor);
             }
             mechanicalAngleDeg(currentSensor);
+            //Angular speed observer
+            speedObserverRun(AOHandler,currentSensor->angleRad);
             currentSensor->flag_dataRdy=0;
-            requestMsg.tRcounter=0;
+            currentSensor->updateCounter=0;
         }
+        //angle data packaging
+        if(currentSensor->angleDeg>=0)
+        {
+            temp= currentSensor->angleDeg/ANGLEFACTOR;
+        }
+        else
+        {
+            temp=~((uint16_t)(-currentSensor->angleDeg/ANGLEFACTOR))+1;
+        }
+        angle.data[0]=temp&0xFF;
+        angle.data[1]=(temp>>8)&0xFF;
+        temp=(angularObserver.out*RADS2RPM+10000U)*RPMFACTOR;
+        angle.data[2]=temp&0xFF;
+        angle.data[3]=(temp>>8)&0xFF;
+        HAL_sendCAN(&angle);
 
     }
 }
 __interrupt void INT_mainTimer_ISR()
 {
-    requestMsg.tRcounter++;
+    angle.tRcounter++;
+    currentSensor->updateCounter++;
     Interrupt_clearACKGroup(INT_mainTimer_INTERRUPT_ACK_GROUP);
 }
 __interrupt void INT_encoder_I2C_ISR()
@@ -159,9 +183,9 @@ __interrupt void INT_encoder_I2C_ISR()
         }
         else
         {
-            if(currentSensor->I2C_status==SEND_WITHOUT_STOP_BUSY || currentSensor->I2C_status==INACTIVE)
+            if(currentSensor->I2C_status==SEND_WITHOUT_STOP_BUSY)
             {
-                currentSensor->I2C_status=SEND_WITHOUT_STOP;//retry, may need to limit the numbers
+                currentSensor->I2C_status=INACTIVE;//retry, may need to limit the numbers
             }
             else if(currentSensor->I2C_status==READ_BUSY)
             {
@@ -170,6 +194,7 @@ __interrupt void INT_encoder_I2C_ISR()
                 {
                     currentSensor->raw[index]=I2C_getData(I2CB_BASE);
                 }
+
                 currentSensor->flag_dataRdy=1;
 
             }

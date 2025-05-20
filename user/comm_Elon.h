@@ -11,6 +11,8 @@ extern "C" {
 #include <string.h>
 #include <stdlib.h>
 
+#define ANGLEFACTOR 0.005496f
+#define RPMFACTOR 3.27675f
 typedef struct _canCom_
 {
     uint32_t canId;

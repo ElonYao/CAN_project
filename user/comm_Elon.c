@@ -1,9 +1,5 @@
 #include "comm_Elon.h"
 
-#ifdef _FLASH
-#pragma CODE_SECTION(INT_mainCAN_ISR, ".TI.ramfunc");
-#endif
-
 canHandle canInit(void *memory,const size_t memorySize)
 {
     canHandle handle;
