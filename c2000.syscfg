@@ -1,8 +1,8 @@
 /**
  * These arguments were used when this file was generated. They will be automatically applied on subsequent loads
  * via the GUI or CLI. Run CLI with '--help' for additional information on how to override these arguments.
- * @cliArgs --device "F28003x" --part "F28003x_100PZ" --package "100PZ" --context "system" --product "C2000WARE@5.03.00.00"
- * @v2CliArgs --device "TMS320F280039C" --package "100PZ" --context "system" --product "C2000WARE@5.03.00.00"
+ * @cliArgs --device "F28003x" --part "F28003x_100PZ" --package "100PZ" --context "system" --product "C2000WARE@5.04.00.00"
+ * @v2CliArgs --device "TMS320F280039C" --package "100PZ" --context "system" --product "C2000WARE@5.04.00.00"
  * @versions {"tool":"1.21.0+3721"}
  */
 
@@ -11,10 +11,10 @@
  */
 const can       = scripting.addModule("/driverlib/can.js", {}, false);
 const can1      = can.addInstance();
-const cputimer  = scripting.addModule("/driverlib/cputimer.js", {}, false);
-const cputimer1 = cputimer.addInstance();
 const i2c       = scripting.addModule("/driverlib/i2c.js", {}, false);
 const i2c1      = i2c.addInstance();
+const FREERTOS  = scripting.addModule("/kernel/freertos_tool/FREERTOS", {}, false);
+const FREERTOS1 = FREERTOS.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -28,14 +28,6 @@ can1.msgObj1.msgType       = "CAN_MSG_OBJ_TYPE_TX";
 can1.msgObj1.msgLen        = 8;
 can1.msgObj1.msgID         = 291;
 
-cputimer1.$name                    = "mainTimer";
-cputimer1.emulationMode            = "CPUTIMER_EMULATIONMODE_RUNFREE";
-cputimer1.enableInterrupt          = true;
-cputimer1.registerInterrupts       = true;
-cputimer1.startTimer               = true;
-cputimer1.timerPeriod              = 120000;
-cputimer1.timerInt.enableInterrupt = true;
-
 i2c1.$name                  = "encoder_I2C";
 i2c1.emulationMode          = "I2C_EMULATION_FREE_RUN";
 i2c1.bitCount               = "I2C_BITCOUNT_8";
@@ -47,6 +39,11 @@ i2c1.i2c.i2c_sdaPin.$assign = "GPIO34";
 i2c1.i2c.i2c_sclPin.$assign = "GPIO51";
 i2c1.sdaQual.padConfig      = "STD";
 i2c1.sclQual.padConfig      = "STD";
+
+FREERTOS1.$name                    = "myFREERTOS0";
+FREERTOS1.CPU_CLOCK_HZ             = 120000000;
+FREERTOS1.CHECK_FOR_STACK_OVERFLOW = 2;
+FREERTOS1.USE_MALLOC_FAILED_HOOK   = true;
 
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future

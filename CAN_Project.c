@@ -55,6 +55,14 @@
 #include "i2c_Elon.h"
 #include "speedObserver_Elon.h"
 #include "circularBuffer.h"
+#include "c2000_freertos.h"
+#include "FreeRTOS.h"
+
+
+//Function prototypes
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName );
+void vApplicationMallocFailedHook( void );
+void rtosInit(void);
 
 canMsg_t angle={
     .canId=0x123,
@@ -84,12 +92,22 @@ as5600Obj *currentSensor=&sensor1;
 speedObserver_obj angularObserver;
 speedObserverHandle AOHandler;
 
+struct canBroadData
+{
+    float32_t angleDeg;
+    float32_t angularSpeed;
+};
+QueueHandle_t gCANPhysiqueue;
+
+static uint8_t gflQueueBuf[1*sizeof(struct canBroadData)];
+static StaticQueue_t gQueueStaticStruct;
+
 //
 // Main
 //
 void main(void)
 {
-    uint16_t temp;
+
     //
     // Initialize device clock and peripherals
     //
@@ -131,44 +149,13 @@ void main(void)
     EINT;
     ERTM;
     zeroCalibration(currentSensor);
+    rtosInit();
     while(1)
     {
-        if(currentSensor->updateCounter>=2)
-        {
-            while(!currentSensor->flag_dataRdy)
-            {
-                HAL_i2cRead(currentSensor);
-            }
-            mechanicalAngleDeg(currentSensor);
-            //Angular speed observer
-            speedObserverRun(AOHandler,currentSensor->angleRad);
-            currentSensor->flag_dataRdy=0;
-            currentSensor->updateCounter=0;
-        }
-        //angle data packaging
-        if(currentSensor->angleDeg>=0)
-        {
-            temp= currentSensor->angleDeg/ANGLEFACTOR;
-        }
-        else
-        {
-            temp=~((uint16_t)(-currentSensor->angleDeg/ANGLEFACTOR))+1;
-        }
-        angle.data[0]=temp&0xFF;
-        angle.data[1]=(temp>>8)&0xFF;
-        temp=(angularObserver.out*RADS2RPM+10000U)*RPMFACTOR;
-        angle.data[2]=temp&0xFF;
-        angle.data[3]=(temp>>8)&0xFF;
-        HAL_sendCAN(&angle);
 
     }
 }
-__interrupt void INT_mainTimer_ISR()
-{
-    angle.tRcounter++;
-    currentSensor->updateCounter++;
-    Interrupt_clearACKGroup(INT_mainTimer_INTERRUPT_ACK_GROUP);
-}
+
 __interrupt void INT_encoder_I2C_ISR()
 {
     I2C_InterruptSource intSource;
@@ -214,6 +201,102 @@ __interrupt void INT_encoder_I2C_ISR()
     }
     Interrupt_clearACKGroup(INT_encoder_I2C_INTERRUPT_ACK_GROUP);
 }
+
+//AS5600 data reading task
+void as5600Task(void *pvParameters)
+{
+    const TickType_t xDelay = 2 / portTICK_PERIOD_MS;
+    struct canBroadData data;
+    for(;;)
+    {
+        while(!currentSensor->flag_dataRdy)
+        {
+            HAL_i2cRead(currentSensor);
+        }
+        mechanicalAngleDeg(currentSensor);
+        //Angular speed observer
+        speedObserverRun(AOHandler,currentSensor->angleRad);
+        data.angleDeg=currentSensor->angleDeg;
+        data.angularSpeed=AOHandler->out;
+        xQueueOverwrite(gCANPhysiqueue,&data);
+        currentSensor->flag_dataRdy=0;
+        vTaskDelay(xDelay);
+    }
+
+}
+
+void canMessageTask(void * pvParameters)
+{
+    canMsg_t *obj=(canMsg_t *)pvParameters;
+    struct canBroadData data;
+    uint16_t temp;
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = obj->tRate;
+    xLastWakeTime=xTaskGetTickCount();
+    for(;;)
+    {
+        xTaskDelayUntil(&xLastWakeTime, xFrequency);
+        xQueueReceive(gCANPhysiqueue, &data, 0);
+        //angle data packaging
+        if(data.angleDeg>=0)
+        {
+            temp= data.angleDeg/ANGLEFACTOR;
+        }
+        else
+        {
+            temp=~((uint16_t)((0-data.angleDeg)/ANGLEFACTOR))+1;
+        }
+        obj->data[0]=temp&0xFF;
+        obj->data[1]=(temp>>8)&0xFF;
+        temp=(data.angularSpeed*RADS2RPM+10000U)*RPMFACTOR;
+        obj->data[2]=temp&0xFF;
+        obj->data[3]=(temp>>8)&0xFF;
+        HAL_sendCAN(obj);
+    }
+}
+void rtosInit(void)
+{   //create queue
+    gCANPhysiqueue=xQueueCreateStatic(1,sizeof(struct canBroadData),gflQueueBuf,&gQueueStaticStruct);
+    //create tasks
+    xTaskCreate(as5600Task, "encoderTask", 128, NULL, 2, NULL);
+    xTaskCreate(canMessageTask, "CANtask", 128, &angle, 1, NULL);
+    vTaskStartScheduler();
+
+}
+//
+// vApplicationStackOverflowHook - Checks run time stack overflow
+//
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+{
+    ( void ) pcTaskName;
+    ( void ) pxTask;
+
+    /* Run time stack overflow checking is performed if
+    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
+    function is called if a stack overflow is detected. */
+    taskDISABLE_INTERRUPTS();
+    for( ;; );
+}
+
+//
+// vApplicationMallocFailedHook - Hook function for catching pvPortMalloc() failures
+//
+void vApplicationMallocFailedHook( void )
+{
+    /* vApplicationMallocFailedHook() will only be called if
+    configUSE_MALLOC_FAILED_HOOK is set to 1 in FreeRTOSConfig.h. It is a hook
+    function that will get called if a call to pvPortMalloc() fails.
+    pvPortMalloc() is called internally by the kernel whenever a task, queue,
+    timer or semaphore is created.  It is also called by various parts of the
+    demo application.  If heap_1.c or heap_2.c are used, then the size of the
+    heap available to pvPortMalloc() is defined by configTOTAL_HEAP_SIZE in
+    FreeRTOSConfig.h, and the xPortGetFreeHeapSize() API function can be used
+    to query the size of free heap space that remains (although it does not
+    provide information on how the remaining heap might be fragmented). */
+    taskDISABLE_INTERRUPTS();
+    for( ;; );
+}
+
 //
 // End of File
 //

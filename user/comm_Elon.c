@@ -45,22 +45,10 @@ void HAL_sendCAN(canMsg_t *msg)
 {
 
     uint32_t temp;
-    if(msg->tRate)
-    {
-        CAN_setupMessageObject(CAN0_BASE, msg->objID, msg->canId, msg->msgIDtype,msg->msgObjtype, 0, 0, msg->len);
-        CAN_sendMessage(CAN0_BASE, msg->objID, msg->len,msg->data);
-        CAN_getErrorCount(CAN0_BASE, &temp, &msg->errorCounter);
-    }
-    else if(msg->tRate>0)
-    {
-        if(msg->tRcounter>=msg->tRate)
-        {
-                CAN_setupMessageObject(CAN0_BASE, msg->objID, msg->canId, msg->msgIDtype,msg->msgObjtype, 0, 0, msg->len);
-                CAN_sendMessage(CAN0_BASE, msg->objID, msg->len,msg->data);
-                CAN_getErrorCount(CAN0_BASE, &temp, &msg->errorCounter);
-                msg->tRcounter=0;
-         }
-    }
+    CAN_setupMessageObject(CAN0_BASE, msg->objID, msg->canId, msg->msgIDtype,msg->msgObjtype, 0, 0, msg->len);
+    CAN_sendMessage(CAN0_BASE, msg->objID, msg->len,msg->data);
+    CAN_getErrorCount(CAN0_BASE, &temp, &msg->errorCounter);
+
 }
 cmdHandle cmdInit(void *memory,const size_t memorySize)
 {
